@@ -6,17 +6,19 @@
     <title>Claude Multi-Chat (Streaming)</title>
     <style>
         :root {
-            --border-color: #ccc;
+            --border-color: #000;
             --bg-color: #ffffff;
             --text-color: #000000;
-            --light-bg: #f5f5f5;
+            --light-bg: #f0f0f0;
             --button-bg: #000;
             --button-text: #fff;
-            --error-color: #D8000C;
-            --tool-color: #00529B;
+            --error-color: #000;
+            --tool-color: #333;
         }
         body {
-            font-family: sans-serif;
+            font-family: Georgia, serif;
+            font-size: 16px;
+            line-height: 1.5;
             margin: 0;
             display: flex;
             flex-direction: column;
@@ -37,7 +39,7 @@
         }
         #sidebar {
             flex: 0 0 250px;
-            border-right: 1px solid var(--border-color);
+            border-right: 2px solid var(--border-color);
             padding: 1em;
             display: flex;
             flex-direction: column;
@@ -51,11 +53,10 @@
             flex-grow: 1;
         }
         #chat-list li {
-            padding: 0.8em;
+            padding: 1em;
             margin-bottom: 0.5em;
-            border: 1px solid var(--border-color);
+            border: 2px solid var(--border-color);
             cursor: pointer;
-            border-radius: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -77,40 +78,66 @@
             overflow-y: auto;
             white-space: pre-wrap;
             word-wrap: break-word;
+            font-size: 18px;
         }
-        .message { margin-bottom: 1em; }
+        .message { 
+            margin-bottom: 1.5em; 
+            padding-bottom: 0.5em;
+            border-bottom: 1px solid #ccc;
+        }
         .message.user { font-weight: bold; }
         .message.assistant { color: #333; }
-        .message.error { color: var(--error-color); font-weight: bold; }
-        .message.tool { color: var(--tool-color); font-style: italic; }
-        #input-area { padding: 1em; border-top: 1px solid var(--border-color); }
+        .message.error { 
+            color: var(--error-color); 
+            font-weight: bold; 
+            border: 2px solid #000;
+            padding: 0.5em;
+        }
+        .message.tool { 
+            color: var(--tool-color); 
+            font-style: italic; 
+            background-color: #f0f0f0;
+            padding: 0.5em;
+        }
+        #input-area { 
+            padding: 1em; 
+            border-top: 2px solid var(--border-color); 
+        }
         button {
             background-color: var(--button-bg);
             color: var(--button-text);
-            border: none;
+            border: 2px solid #000;
             cursor: pointer;
-            padding: 0.8em 1.2em;
-            border-radius: 4px;
+            padding: 1em 1.5em;
+            font-size: 16px;
+            font-weight: bold;
         }
-        button:disabled { background-color: #888; }
+        button:disabled { 
+            background-color: #888; 
+            border-color: #888;
+        }
         textarea {
             width: 100%;
-            padding: 0.8em;
+            padding: 1em;
             margin: 0.5em 0;
             box-sizing: border-box;
-            font-size: 1em;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            font-family: Georgia, serif;
         }
+        /* Removed blinking cursor as it doesn't work well on e-ink */
         .cursor { 
             display: inline-block; 
-            width: 10px; 
+            width: 2px; 
             background-color: #000; 
-            animation: blink 1s step-end infinite; 
-        } 
-        @keyframes blink { 
-            from, to { background-color: transparent; } 
-            50% { background-color: #000; } 
+            margin-left: 2px;
+        }
+        #secure-notice {
+            padding: 1em; 
+            background-color: #f0f0f0; 
+            border: 2px solid #000; 
+            font-size: 0.9em;
+            margin-top: 1em;
         }
     </style>
 </head>
@@ -122,7 +149,7 @@
             <hr>
             <ul id="chat-list"></ul>
             <hr>
-            <div id="secure-notice" style="padding: 1em; background-color: #eaf7e9; border: 1px solid #a8d5aa; border-radius: 4px; font-size: 0.9em;">
+            <div id="secure-notice">
                 <p>Your API key is securely managed by the server.</p>
             </div>
         </aside>
@@ -229,7 +256,11 @@
         
         function evaluateCalculation(expression) { 
             try { 
-                return new Function('return ' + expression)(); 
+                // Safer evaluation using regex to allow only numbers and basic operations
+                if (!/^[\d\s+\-*/().,]+$/.test(expression)) {
+                    throw new Error('Invalid characters in expression');
+                }
+                return Function('"use strict"; return (' + expression + ')')();
             } catch (error) { 
                 return `Invalid expression: ${error.message}`; 
             } 
@@ -254,7 +285,7 @@
             
             const apiUrl = '/.netlify/edge-functions/claude-proxy';
             let assistantMessageElem = displayMessage('assistant', '');
-            assistantMessageElem.innerHTML = "Assistant: <span class='cursor'></span>";
+            assistantMessageElem.innerHTML = "Assistant: <span class='cursor'>|</span>";
             let fullResponse = '';
             
             try {
@@ -263,12 +294,20 @@
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         system: CALCULATOR_SYSTEM_PROMPT,
-                        messages: activeChat.messages
+                        messages: activeChat.messages.filter(m => m.role !== 'tool') // Filter out tool messages for API
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API Error: ${response.status} - ${await response.text()}`);
+                    const errorText = await response.text();
+                    let errorMessage;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.error || `API Error: ${response.status}`;
+                    } catch {
+                        errorMessage = `API Error: ${response.status} - ${errorText}`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const reader = response.body.getReader();
@@ -283,11 +322,14 @@
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
-                                const jsonData = JSON.parse(line.substring(6));
-                                if (jsonData.type === 'content_block_delta') {
+                                const data = line.substring(6);
+                                if (data === '[DONE]') continue;
+                                
+                                const jsonData = JSON.parse(data);
+                                if (jsonData.type === 'content_block_delta' && jsonData.delta?.text) {
                                     fullResponse += jsonData.delta.text;
                                     let safeText = fullResponse.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                                    assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'></span>`;
+                                    assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'>|</span>`;
                                     chatLog.scrollTop = chatLog.scrollHeight;
                                 }
                             } catch (e) {
@@ -303,7 +345,7 @@
                 const calcRegex = /<calculate>([\s\S]*?)<\/calculate>/;
                 const match = fullResponse.match(calcRegex);
                 if (match && match[1]) {
-                    const expression = match[1];
+                    const expression = match[1].trim();
                     const result = evaluateCalculation(expression);
                     const resultText = `Result: ${result}`;
                     displayMessage('tool', resultText);
@@ -337,3 +379,5 @@
         loadData();
     });
 </script>
+</body>
+</html>
