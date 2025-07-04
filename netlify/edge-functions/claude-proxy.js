@@ -47,9 +47,14 @@ export default async (request, context) => {
             });
         }
 
-        // Use a valid Claude model name
-        const modelName = 'claude-opus-4-20250514'; // or 'claude-3-opus-20240229' for more powerful model
+        const modelName = 'claude-opus-4-20250514'; // Your specified model name
         const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
+
+        console.log('Making request to Anthropic API:', {
+            endpoint: anthropicApiEndpoint,
+            model: modelName,
+            messageCount: messages.length
+        });
 
         const anthropicResponse = await fetch(anthropicApiEndpoint, {
             method: 'POST',
@@ -69,17 +74,31 @@ export default async (request, context) => {
 
         if (!anthropicResponse.ok) {
             const errorText = await anthropicResponse.text();
-            console.error('Anthropic API Error:', errorText);
+            console.error('Anthropic API Error Details:', {
+                status: anthropicResponse.status,
+                statusText: anthropicResponse.statusText,
+                headers: Object.fromEntries(anthropicResponse.headers.entries()),
+                body: errorText
+            });
             
             let errorMessage;
             try {
                 const errorJson = JSON.parse(errorText);
-                errorMessage = errorJson.error?.message || errorJson.message || 'Unknown API error';
+                errorMessage = errorJson.error?.message || errorJson.message || errorJson.error || 'Unknown API error';
+                
+                // If it's a 404, include more context
+                if (anthropicResponse.status === 404) {
+                    errorMessage = `404 Not Found - ${errorMessage}. Model: ${modelName}`;
+                }
             } catch {
-                errorMessage = errorText || 'Unknown API error';
+                errorMessage = errorText || `HTTP ${anthropicResponse.status} error`;
             }
             
-            return new Response(JSON.stringify({ error: `Anthropic API error: ${errorMessage}` }), {
+            return new Response(JSON.stringify({ 
+                error: errorMessage,
+                status: anthropicResponse.status,
+                model: modelName
+            }), {
                 status: anthropicResponse.status,
                 headers: { 
                     'Content-Type': 'application/json',
@@ -101,7 +120,10 @@ export default async (request, context) => {
 
     } catch (error) {
         console.error('Edge Function Error:', error);
-        return new Response(JSON.stringify({ error: 'Internal server error: ' + error.message }), {
+        return new Response(JSON.stringify({ 
+            error: 'Internal server error: ' + error.message,
+            details: error.stack
+        }), {
             status: 500,
             headers: { 
                 'Content-Type': 'application/json',
