@@ -157,11 +157,12 @@
             sendBtn.disabled = true;
             sendBtn.textContent = 'Claude is generating...';
             
-            const apiUrl = '/.netlify/functions/claude-proxy';
+            // --- THIS IS THE FINAL, CORRECTED LINE ---
+            // The path for an edge function is just its filename.
+            const apiUrl = '/claude-proxy';
 
-            // --- NEW STREAMING LOGIC ---
-            let assistantMessageElem = displayMessage('assistant', ''); // Create an empty placeholder
-            assistantMessageElem.innerHTML = "Assistant: <span class='cursor'></span>"; // Add a blinking cursor
+            let assistantMessageElem = displayMessage('assistant', '');
+            assistantMessageElem.innerHTML = "Assistant: <span class='cursor'></span>";
             let fullResponse = '';
             
             try {
@@ -189,22 +190,22 @@
                     const lines = chunk.split('\n');
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            const jsonData = JSON.parse(line.substring(6));
-                            if (jsonData.type === 'content_block_delta') {
-                                fullResponse += jsonData.delta.text;
-                                // Sanitize HTML to be safe before rendering
-                                let safeText = fullResponse.replace(/</g, "<").replace(/>/g, ">");
-                                assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'></span>`;
-                                chatLog.scrollTop = chatLog.scrollHeight;
+                            try {
+                                const jsonData = JSON.parse(line.substring(6));
+                                if (jsonData.type === 'content_block_delta') {
+                                    fullResponse += jsonData.delta.text;
+                                    let safeText = fullResponse.replace(/</g, "<").replace(/>/g, ">");
+                                    assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'></span>`;
+                                    chatLog.scrollTop = chatLog.scrollHeight;
+                                }
+                            } catch (e) {
+                                // Ignore malformed JSON chunks, which can happen in streams
                             }
                         }
                     }
                 }
                 
-                // Finalize the message
                 assistantMessageElem.innerHTML = `Assistant: ${fullResponse.replace(/</g, "<").replace(/>/g, ">")}`;
-                
-                // Now that the stream is done, save the full message and check for tools
                 activeChat.messages.push({ role: 'assistant', content: fullResponse });
 
                 const calcRegex = /<calculate>([\s\S]*?)<\/calculate>/;
@@ -232,7 +233,6 @@
         sendBtn.addEventListener('click', getClaudeResponse);
         messageInput.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); getClaudeResponse(); } });
 
-        // Add a simple blinking cursor style
         const styleSheet = document.createElement("style");
         styleSheet.type = "text/css";
         styleSheet.innerText = ".cursor { display: inline-block; width: 10px; background-color: #000; animation: blink 1s step-end infinite; } @keyframes blink { from, to { background-color: transparent; } 50% { background-color: #000; } }";
