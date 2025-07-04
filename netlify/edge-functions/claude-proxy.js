@@ -22,7 +22,7 @@ export default async (request, context) => {
     // Securely get the API key from Netlify's environment variables
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) {
-        return new Response(JSON.stringify({ error: 'API key not configured.' }), {
+        return new Response(JSON.stringify({ error: 'API key not configured. Please set ANTHROPIC_API_KEY in Netlify environment variables.' }), {
             status: 500,
             headers: { 
                 'Content-Type': 'application/json',
@@ -33,11 +33,12 @@ export default async (request, context) => {
 
     try {
         // Get the body from the incoming request
-        const { system, messages } = await request.json();
+        const requestBody = await request.json();
+        const { system, messages } = requestBody;
 
         // Validate input
         if (!messages || !Array.isArray(messages)) {
-            return new Response(JSON.stringify({ error: 'Invalid messages format.' }), {
+            return new Response(JSON.stringify({ error: 'Invalid messages format. Messages must be an array.' }), {
                 status: 400,
                 headers: { 
                     'Content-Type': 'application/json',
@@ -46,7 +47,8 @@ export default async (request, context) => {
             });
         }
 
-        const modelName = 'claude-opus-4-20250514'; // Use a valid model name
+        // Use a valid Claude model name
+        const modelName = 'claude-opus-4-20250514'; // or 'claude-3-opus-20240229' for more powerful model
         const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
 
         const anthropicResponse = await fetch(anthropicApiEndpoint, {
@@ -59,7 +61,7 @@ export default async (request, context) => {
             body: JSON.stringify({
                 model: modelName,
                 max_tokens: 4096,
-                system: system,
+                system: system || '',
                 messages: messages,
                 stream: true
             })
@@ -68,7 +70,16 @@ export default async (request, context) => {
         if (!anthropicResponse.ok) {
             const errorText = await anthropicResponse.text();
             console.error('Anthropic API Error:', errorText);
-            return new Response(JSON.stringify({ error: 'API request failed: ' + errorText }), {
+            
+            let errorMessage;
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.error?.message || errorJson.message || 'Unknown API error';
+            } catch {
+                errorMessage = errorText || 'Unknown API error';
+            }
+            
+            return new Response(JSON.stringify({ error: `Anthropic API error: ${errorMessage}` }), {
                 status: anthropicResponse.status,
                 headers: { 
                     'Content-Type': 'application/json',
