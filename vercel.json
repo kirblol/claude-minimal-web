@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/claude-proxy.js": {
+      "maxDuration": 30
+    }
+  }
+}
