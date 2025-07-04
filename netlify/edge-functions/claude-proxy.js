@@ -1,12 +1,22 @@
-// This is the final, correct Edge Function code, placed in the correct folder.
-
-// The handler signature is different for Edge Functions.
-// It receives a `request` object and the `context` object.
 export default async (request, context) => {
-
     // Only allow POST requests
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    // Add CORS headers for browser compatibility
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    };
+
+    // Handle preflight requests
+    if (request.method === 'OPTIONS') {
+        return new Response(null, {
+            status: 200,
+            headers: corsHeaders,
+        });
     }
 
     // Securely get the API key from Netlify's environment variables
@@ -14,17 +24,31 @@ export default async (request, context) => {
     if (!ANTHROPIC_API_KEY) {
         return new Response(JSON.stringify({ error: 'API key not configured.' }), {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders 
+            },
         });
     }
 
-    // Get the body from the incoming request
-    const { system, messages } = await request.json();
-
-    const modelName = 'claude-opus-4-20250514'; 
-    const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
-
     try {
+        // Get the body from the incoming request
+        const { system, messages } = await request.json();
+
+        // Validate input
+        if (!messages || !Array.isArray(messages)) {
+            return new Response(JSON.stringify({ error: 'Invalid messages format.' }), {
+                status: 400,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders 
+                },
+            });
+        }
+
+        const modelName = 'claude-3-5-sonnet-20241022'; // Use a valid model name
+        const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
+
         const anthropicResponse = await fetch(anthropicApiEndpoint, {
             method: 'POST',
             headers: {
@@ -37,24 +61,41 @@ export default async (request, context) => {
                 max_tokens: 4096,
                 system: system,
                 messages: messages,
-                stream: true // Enable streaming
+                stream: true
             })
         });
 
-        // Directly return a new Response, streaming the body from Anthropic.
-        // This is the correct pattern for Edge Functions.
+        if (!anthropicResponse.ok) {
+            const errorText = await anthropicResponse.text();
+            console.error('Anthropic API Error:', errorText);
+            return new Response(JSON.stringify({ error: 'API request failed: ' + errorText }), {
+                status: anthropicResponse.status,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...corsHeaders 
+                },
+            });
+        }
+
+        // Return the streaming response with proper headers
         return new Response(anthropicResponse.body, {
-            status: anthropicResponse.status,
+            status: 200,
             headers: {
                 'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                ...corsHeaders
             }
         });
 
     } catch (error) {
         console.error('Edge Function Error:', error);
-        return new Response(JSON.stringify({ error: error.message }), {
+        return new Response(JSON.stringify({ error: 'Internal server error: ' + error.message }), {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                ...corsHeaders 
+            },
         });
     }
 };
