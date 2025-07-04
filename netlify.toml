@@ -1,9 +1,0 @@
-# This file tells Netlify how to configure your project.
-[functions]
-  # This section configures your serverless function.
-  [functions."claude-proxy"]
-    # This is the magic line!
-    # It tells Netlify to run this function using the modern Edge runtime,
-    # which correctly handles the `new Response()` streaming syntax.
-    node_bundler = "esbuild"
-    generator = "@netlify/plugin-functions-core"
