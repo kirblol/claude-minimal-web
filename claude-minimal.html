@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Claude Minimal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 10px;
+            background: #f0f0f0;
+        }
+        #chat {
+            height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background: white;
+            margin-bottom: 10px;
+        }
+        .user { color: #0066cc; margin: 5px 0; }
+        .assistant { color: #009933; margin: 5px 0; }
+        input, button {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+        }
+        input { width: 75%; }
+        button { width: 20%; background: #0066cc; color: white; }
+    </style>
+</head>
+<body>
+    <div id="chat"></div>
+    <div>
+        <input type="text" id="input" placeholder="Ask Claude..." autocomplete="off">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        const CLOUDE_WORKER_URL = "YOUR_WORKER_URL_HERE"; // Replace in Step 4
+        
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            input.disabled = true;
+            addToChat('user', message);
+            input.value = '';
+            
+            try {
+                const response = await fetch(CLOUDE_WORKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                addToChat('assistant', data.response);
+            } catch (error) {
+                addToChat('system', `Error: ${error.message}`);
+            }
+            input.disabled = false;
+            input.focus();
+        }
+        
+        function addToChat(role, text) {
+            const chat = document.getElementById('chat');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = role;
+            msgDiv.textContent = `${role.charAt(0).toUpperCase() + role.slice(1)}: ${text}`;
+            chat.appendChild(msgDiv);
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        // Send on Enter key
+        document.getElementById('input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
