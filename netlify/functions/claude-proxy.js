@@ -1,22 +1,19 @@
-// This is our secure, server-side function.
+// This function now supports streaming responses to avoid timeouts.
 exports.handler = async function(event, context) {
-    // Only allow POST requests
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // Get the API key from Netlify's secure environment variables
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_API_KEY) {
         return { statusCode: 500, body: JSON.stringify({ error: 'API key not configured.' }) };
     }
 
-    // Get the messages from the frontend's request
     const { system, messages } = JSON.parse(event.body);
 
-    // --- UPDATED AS REQUESTED ---
-    const modelName = 'claude-opus-4-20250514'; 
-    
+    // --- UPDATED to your preferred model, now viable with streaming ---
+    const modelName = 'claude-opus-4-20250514';
+
     const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
 
     try {
@@ -29,26 +26,45 @@ exports.handler = async function(event, context) {
             },
             body: JSON.stringify({
                 model: modelName,
-                max_tokens: 2048, // This controls the max length of the *response*
+                max_tokens: 4096, // A high value is fine for streaming
                 system: system,
-                messages: messages
+                messages: messages,
+                stream: true // This is the magic flag that enables streaming
             })
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Anthropic API Error:', errorData);
-            // Pass the specific error message from Anthropic back to the frontend
-            return { statusCode: response.status, body: JSON.stringify({ error: errorData.error.message }) };
-        }
+        // This ReadableStream will pipe the data from Anthropic directly to the browser
+        const readableStream = new ReadableStream({
+            async start(controller) {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
 
-        const result = await response.json();
-        const assistantMessage = result.content[0].text;
+                function push() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            controller.close();
+                            return;
+                        }
+                        // Pass the chunk of data directly through
+                        controller.enqueue(value);
+                        push();
+                    }).catch(err => {
+                        console.error('Stream reading error', err);
+                        controller.error(err);
+                    });
+                }
+                push();
+            }
+        });
 
-        // Send the successful response back to the frontend
+        // Return the stream directly to the browser
         return {
             statusCode: 200,
-            body: JSON.stringify({ assistantResponse: assistantMessage })
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'X-Content-Type-Options': 'nosniff' // Security header
+            },
+            body: readableStream,
         };
 
     } catch (error) {
