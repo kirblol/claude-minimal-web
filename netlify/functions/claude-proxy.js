@@ -1,11 +1,9 @@
-// This is the final, corrected version that properly handles Netlify's event object.
+// This is the final, correct version that will work with the netlify.toml configuration.
 exports.handler = async function(event, context) {
-    // Check if it's a POST request
     if (event.httpMethod !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
     }
 
-    // Securely get the API key from environment variables
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_API_KEY) {
         return new Response(JSON.stringify({ error: 'API key not configured.' }), {
@@ -14,13 +12,10 @@ exports.handler = async function(event, context) {
         });
     }
 
-    // --- THE KEY FIX IS HERE ---
-    // We access the request body directly from the `event.body` property.
-    // No function call is needed.
-    const body = event.body;
+    // On this runtime, the body is a string that needs to be parsed.
+    const body = event.body; 
     const { system, messages } = JSON.parse(body);
 
-    // Using the powerful Opus model, which is now safe thanks to streaming.
     const modelName = 'claude-opus-4-20250514'; 
     const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
 
@@ -37,16 +32,15 @@ exports.handler = async function(event, context) {
                 max_tokens: 4096,
                 system: system,
                 messages: messages,
-                stream: true // Enable streaming
+                stream: true
             })
         });
 
-        // Directly return a new Response object using the body and headers from Anthropic.
-        // This is the modern, correct way to stream on Netlify.
+        // This correctly streams the response from Anthropic through the Edge Function.
         return new Response(anthropicResponse.body, {
             status: anthropicResponse.status,
             headers: {
-                'Content-Type': 'text/event-stream', // Correct MIME type for Server-Sent Events
+                'Content-Type': 'text/event-stream',
             }
         });
 
@@ -54,7 +48,7 @@ exports.handler = async function(event, context) {
         console.error('Proxy Function Error:', error);
         return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-type': 'application/json' },
         });
     }
 };
