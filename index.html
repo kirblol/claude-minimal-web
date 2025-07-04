@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Multi-Chat</title>
+    <title>Claude Multi-Chat (Netlify)</title>
     <style>
         :root {
             --border-color: #ccc;
@@ -31,7 +31,9 @@
             overflow: hidden;
         }
         @media (min-width: 768px) {
-            .container { flex-direction: row; }
+            .container {
+                flex-direction: row;
+            }
         }
         #sidebar {
             flex: 0 0 250px;
@@ -83,7 +85,6 @@
         .message.tool { color: var(--tool-color); font-style: italic; }
 
         #input-area { padding: 1em; border-top: 1px solid var(--border-color); }
-        #api-key-section { background-color: #f0e68c; padding: 1em; margin-bottom: 1em; }
         
         input, button, textarea {
             width: 100%;
@@ -109,11 +110,8 @@
             <hr>
             <ul id="chat-list"></ul>
             <hr>
-            <div id="api-key-section">
-                <label for="api-key-input">Anthropic API Key:</label>
-                <input type="password" id="api-key-input" placeholder="Enter & Save Key">
-                <button id="save-key-btn">Save Key</button>
-                <p id="key-status" style="font-size: 0.8em;"></p>
+            <div id="secure-notice" style="padding: 1em; background-color: #eaf7e9; border: 1px solid #a8d5aa; border-radius: 4px; font-size: 0.9em;">
+                <p>Your API key is securely managed by the server.</p>
             </div>
         </aside>
 
@@ -128,44 +126,27 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const apiKeyInput = document.getElementById('api-key-input');
-        const saveKeyBtn = document.getElementById('save-key-btn');
-        const keyStatus = document.getElementById('key-status');
         const chatLog = document.getElementById('chat-log');
         const messageInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const newChatBtn = document.getElementById('new-chat-btn');
         const chatList = document.getElementById('chat-list');
 
-        let apiKey = '';
         let appData = { chats: {}, activeChatId: null };
-        
         const CALCULATOR_SYSTEM_PROMPT = `You have access to a calculator tool. To use it, you must respond with **only** the following format: <calculate>expression</calculate>. For example: <calculate>2 * (3 + 4)</calculate>. The user will see the result of the calculation. Do not add any other text or explanation in the same message when you use the tool. Perform the calculation when the user asks a question that requires a precise mathematical answer.`;
 
         function saveData() {
-            localStorage.setItem('anthropicApiKey', apiKey);
-            localStorage.setItem('claudeMultiChatData', JSON.stringify(appData));
+            localStorage.setItem('claudeMultiChatData_Netlify', JSON.stringify(appData));
         }
 
         function loadData() {
-            const savedKey = localStorage.getItem('anthropicApiKey');
-            if (savedKey) {
-                apiKey = savedKey;
-                apiKeyInput.value = '********';
-                keyStatus.textContent = 'API Key is saved.';
-            } else {
-                keyStatus.textContent = 'No API Key found.';
-            }
-
-            const savedChatData = localStorage.getItem('claudeMultiChatData');
+            const savedChatData = localStorage.getItem('claudeMultiChatData_Netlify');
             if (savedChatData) {
                 appData = JSON.parse(savedChatData);
             }
-
             if (Object.keys(appData.chats).length === 0) {
                 createNewChat(false);
             }
-            
             renderChatList();
             renderActiveChat();
         }
@@ -193,7 +174,6 @@
                 sendBtn.disabled = true;
                 return;
             }
-            
             activeChat.messages.forEach(msg => displayMessage(msg.role, msg.content));
             messageInput.disabled = false;
             sendBtn.disabled = false;
@@ -257,10 +237,6 @@
         }
 
         async function getClaudeResponse() {
-            if (!apiKey) {
-                alert('Please save your API Key first.');
-                return;
-            }
             const activeChat = appData.chats[appData.activeChatId];
             const userMessage = messageInput.value.trim();
             if (!userMessage || !activeChat) return;
@@ -277,37 +253,25 @@
             sendBtn.disabled = true;
             sendBtn.textContent = 'Claude is thinking...';
             
-            // --- THIS IS THE CORRECTED LINE ---
-            // Using a more reliable CORS proxy.
-            const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
-            const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent(anthropicApiEndpoint);
-
-            const modelName = 'claude-3-opus-20240229';
-            const messagesForApi = [...activeChat.messages];
+            const apiUrl = '/.netlify/functions/claude-proxy';
 
             try {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'content-type': 'application/json'
-                    },
+                    headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
-                        model: modelName,
-                        max_tokens: 2048,
                         system: CALCULATOR_SYSTEM_PROMPT,
-                        messages: messagesForApi
+                        messages: activeChat.messages
                     })
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(`API Error: ${response.status} - ${errorData.error.message}`);
+                    throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown server error'}`);
                 }
 
                 const result = await response.json();
-                const assistantMessage = result.content[0].text;
+                const assistantMessage = result.assistantResponse;
                 await handleAssistantResponse(assistantMessage);
 
             } catch (error) {
@@ -319,17 +283,7 @@
                 saveData();
             }
         }
-
-        saveKeyBtn.addEventListener('click', () => {
-            const newKey = apiKeyInput.value.trim();
-            if (newKey) {
-                apiKey = newKey;
-                apiKeyInput.value = '********';
-                keyStatus.textContent = 'API Key saved.';
-                saveData();
-            }
-        });
-
+        
         newChatBtn.addEventListener('click', () => createNewChat());
 
         chatList.addEventListener('click', (event) => {
@@ -339,6 +293,7 @@
         });
 
         sendBtn.addEventListener('click', getClaudeResponse);
+
         messageInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
