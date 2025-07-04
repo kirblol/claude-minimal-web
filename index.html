@@ -3,93 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Claude Chat</title>
+    <title>Claude Multi-Chat</title>
     <style>
-        /* Ultra-minimalist styling for Kindle Paperwhite */
+        :root {
+            --border-color: #ccc;
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --light-bg: #f5f5f5;
+            --button-bg: #000;
+            --button-text: #fff;
+            --error-color: #D8000C;
+            --tool-color: #00529B;
+        }
         body {
             font-family: sans-serif;
-            margin: 1em;
-            background-color: #ffffff;
-            color: #000000;
+            margin: 0;
+            display: flex;
+            flex-direction: column; /* Default for mobile/Kindle */
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
-        main {
-            max-width: 700px;
-            margin: 0 auto;
+        .container {
+            display: flex;
+            flex-direction: column; /* Default stack layout */
+            height: 100%;
+            overflow: hidden;
         }
-        #chat-log {
-            border: 1px solid #ccc;
+        /* Make it side-by-side on larger screens */
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+            }
+        }
+        #sidebar {
+            flex: 0 0 250px;
+            border-right: 1px solid var(--border-color);
             padding: 1em;
-            min-height: 200px;
-            max-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--light-bg);
             overflow-y: auto;
-            white-space: pre-wrap; /* Allows text to wrap */
-            word-wrap: break-word; /* Breaks long words */
         }
-        .message {
-            margin-bottom: 1em;
+        #chat-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
         }
-        .message.user {
+        #chat-list li {
+            padding: 0.8em;
+            margin-bottom: 0.5em;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #chat-list li.active-chat {
+            background-color: var(--button-bg);
+            color: var(--button-text);
             font-weight: bold;
         }
-        .message.assistant {
-            color: #333;
+        #main-chat {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
+        #chat-log {
+            flex-grow: 1;
+            padding: 1em;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message { margin-bottom: 1em; }
+        .message.user { font-weight: bold; }
+        .message.assistant { color: #333; }
+        .message.error { color: var(--error-color); font-weight: bold; }
+        .message.tool { color: var(--tool-color); font-style: italic; }
+
+        #input-area { padding: 1em; border-top: 1px solid var(--border-color); }
+        #api-key-section { background-color: #f0e68c; padding: 1em; margin-bottom: 1em; }
+        
         input, button, textarea {
             width: 100%;
             padding: 0.8em;
             margin: 0.5em 0;
-            box-sizing: border-box; /* Important for 100% width */
+            box-sizing: border-box;
             font-size: 1em;
         }
         button {
-            background-color: #000;
-            color: #fff;
+            background-color: var(--button-bg);
+            color: var(--button-text);
             border: none;
             cursor: pointer;
         }
-        button:disabled {
-            background-color: #888;
-        }
-        #api-key-section {
-            background-color: #f5f5f5;
-            padding: 1em;
-            border: 1px solid #ccc;
-            margin-bottom: 1em;
-        }
-        hr {
-            border: 1px solid #eee;
-            margin: 1.5em 0;
-        }
+        button:disabled { background-color: #888; }
     </style>
 </head>
 <body>
 
-    <main>
-        <header>
-            <h1>Simple Claude Chat</h1>
-        </header>
-
-        <!-- API Key Section -->
-        <section id="api-key-section">
-            <h2>Settings</h2>
-            <label for="api-key-input">Anthropic API Key:</label>
-            <input type="password" id="api-key-input" placeholder="Enter your API key here">
-            <button id="save-key-btn">Save Key</button>
-            <p id="key-status" style="font-size: 0.8em;"></p>
-        </section>
-
-        <!-- Chat Section -->
-        <section>
-            <h2>Chat</h2>
-            <div id="chat-log"></div>
+    <div class="container">
+        <!-- Sidebar for Chat List -->
+        <aside id="sidebar">
+            <h2>Chats</h2>
+            <button id="new-chat-btn">New Chat</button>
             <hr>
-            <textarea id="message-input" placeholder="Type your message..." rows="3"></textarea>
-            <button id="send-btn">Send Message</button>
-            <button id="clear-chat-btn" style="background-color: #555;">Clear Chat History</button>
-        </section>
-    </main>
+            <ul id="chat-list"></ul>
+            <hr>
+            <div id="api-key-section">
+                <label for="api-key-input">Anthropic API Key:</label>
+                <input type="password" id="api-key-input" placeholder="Enter & Save Key">
+                <button id="save-key-btn">Save Key</button>
+                <p id="key-status" style="font-size: 0.8em;"></p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main id="main-chat">
+            <div id="chat-log">
+                <p>Welcome! Select a chat from the list or start a new one.</p>
+            </div>
+            <div id="input-area">
+                <textarea id="message-input" placeholder="Type your message..." rows="3"></textarea>
+                <button id="send-btn">Send Message</button>
+            </div>
+        </main>
+    </div>
 
     <script>
+    document.addEventListener('DOMContentLoaded', () => {
         // --- DOM Elements ---
         const apiKeyInput = document.getElementById('api-key-input');
         const saveKeyBtn = document.getElementById('save-key-btn');
@@ -97,72 +143,182 @@
         const chatLog = document.getElementById('chat-log');
         const messageInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
-        const clearChatBtn = document.getElementById('clear-chat-btn');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const chatList = document.getElementById('chat-list');
 
         // --- State Variables ---
         let apiKey = '';
-        let conversationHistory = []; // Array of {role: 'user'/'assistant', content: '...'}
+        // AppData will hold all our chats and the current active one
+        let appData = {
+            chats: {},
+            activeChatId: null
+        };
+        
+        // --- SYSTEM PROMPT for Calculator ---
+        const CALCULATOR_SYSTEM_PROMPT = `You have access to a calculator tool. To use it, you must respond with **only** the following format: <calculate>expression</calculate>. For example: <calculate>2 * (3 + 4)</calculate>. The user will see the result of the calculation. Do not add any other text or explanation in the same message when you use the tool. Perform the calculation when the user asks a question that requires a precise mathematical answer.`;
 
-        // --- Functions ---
+        // --- Core Functions ---
 
-        // Function to display messages in the chat log
-        function displayMessage(role, text) {
-            const messageElem = document.createElement('div');
-            messageElem.classList.add('message', role);
-            messageElem.textContent = `${role.charAt(0).toUpperCase() + role.slice(1)}: ${text}`;
-            chatLog.appendChild(messageElem);
-            // Scroll to the bottom of the chat log
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        // Function to save data (API key and chat history) to localStorage
         function saveData() {
             localStorage.setItem('anthropicApiKey', apiKey);
-            localStorage.setItem('claudeChatHistory', JSON.stringify(conversationHistory));
+            localStorage.setItem('claudeMultiChatData', JSON.stringify(appData));
         }
-        
-        // Function to load data from localStorage on page load
+
         function loadData() {
+            // Load API Key
             const savedKey = localStorage.getItem('anthropicApiKey');
             if (savedKey) {
                 apiKey = savedKey;
-                apiKeyInput.value = '********'; // Don't show the full key
-                keyStatus.textContent = 'API Key is saved in your browser.';
+                apiKeyInput.value = '********';
+                keyStatus.textContent = 'API Key is saved.';
             } else {
-                keyStatus.textContent = 'No API Key found. Please enter one.';
+                keyStatus.textContent = 'No API Key found.';
             }
 
-            const savedChat = localStorage.getItem('claudeChatHistory');
-            if (savedChat) {
-                conversationHistory = JSON.parse(savedChat);
-                conversationHistory.forEach(msg => displayMessage(msg.role, msg.content));
+            // Load Chat Data
+            const savedChatData = localStorage.getItem('claudeMultiChatData');
+            if (savedChatData) {
+                appData = JSON.parse(savedChatData);
+            }
+
+            // If no chats exist, create the first one
+            if (Object.keys(appData.chats).length === 0) {
+                createNewChat(false); // Don't save yet, let the chain handle it
+            }
+            
+            renderChatList();
+            renderActiveChat();
+        }
+
+        function renderChatList() {
+            chatList.innerHTML = '';
+            for (const chatId in appData.chats) {
+                const chat = appData.chats[chatId];
+                const listItem = document.createElement('li');
+                listItem.textContent = chat.title;
+                listItem.dataset.chatId = chatId;
+                if (chatId === appData.activeChatId) {
+                    listItem.classList.add('active-chat');
+                }
+                chatList.appendChild(listItem);
             }
         }
 
-        // Function to call the Anthropic API
+        function renderActiveChat() {
+            chatLog.innerHTML = '';
+            const activeChat = appData.chats[appData.activeChatId];
+            if (!activeChat) {
+                chatLog.innerHTML = '<p>Select a chat or start a new one.</p>';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                return;
+            }
+            
+            activeChat.messages.forEach(msg => displayMessage(msg.role, msg.content));
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+        }
+
+        function displayMessage(role, text) {
+            const messageElem = document.createElement('div');
+            messageElem.classList.add('message', role);
+            let roleDisplay = role.charAt(0).toUpperCase() + role.slice(1);
+            if (role === 'tool') roleDisplay = 'Calculator';
+
+            messageElem.textContent = `${roleDisplay}: ${text}`;
+            chatLog.appendChild(messageElem);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        function createNewChat(shouldSave = true) {
+            const chatId = Date.now().toString();
+            appData.chats[chatId] = {
+                id: chatId,
+                title: 'New Chat',
+                messages: [] // Starts empty
+            };
+            appData.activeChatId = chatId;
+            if (shouldSave) {
+                saveData();
+                renderChatList();
+                renderActiveChat();
+            }
+        }
+
+        function switchChat(chatId) {
+            if (chatId === appData.activeChatId) return;
+            appData.activeChatId = chatId;
+            saveData();
+            renderChatList();
+            renderActiveChat();
+        }
+
+        function evaluateCalculation(expression) {
+            try {
+                // Using Function constructor is safer than eval() for this purpose
+                return new Function('return ' + expression)();
+            } catch (error) {
+                return `Invalid expression: ${error.message}`;
+            }
+        }
+        
+        async function handleAssistantResponse(assistantMessage) {
+            const activeChat = appData.chats[appData.activeChatId];
+            
+            // Push Claude's raw response to history for context
+            activeChat.messages.push({ role: 'assistant', content: assistantMessage });
+
+            const calcRegex = /<calculate>([\s\S]*?)<\/calculate>/;
+            const match = assistantMessage.match(calcRegex);
+
+            if (match && match[1]) {
+                const expression = match[1];
+                const result = evaluateCalculation(expression);
+                const resultText = `Result: ${result}`;
+                
+                // Display the original <calculate> message from assistant
+                displayMessage('assistant', assistantMessage);
+                
+                // Display the tool's result and add it to history
+                displayMessage('tool', resultText);
+                activeChat.messages.push({ role: 'tool', content: resultText });
+            } else {
+                // Just a normal message, display it
+                displayMessage('assistant', assistantMessage);
+            }
+        }
+
         async function getClaudeResponse() {
             if (!apiKey) {
-                alert('Please save your Anthropic API Key first.');
+                alert('Please save your API Key first.');
                 return;
             }
 
+            const activeChat = appData.chats[appData.activeChatId];
             const userMessage = messageInput.value.trim();
-            if (!userMessage) return;
-
-            // Add user message to history and display it
-            conversationHistory.push({ role: 'user', content: userMessage });
+            if (!userMessage || !activeChat) return;
+            
+            // Add user message to history
             displayMessage('user', userMessage);
+            activeChat.messages.push({ role: 'user', content: userMessage });
             messageInput.value = '';
+            
+            // If it's the first message, set the chat title
+            if (activeChat.messages.length === 1) {
+                activeChat.title = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
+                renderChatList(); // Update the list with the new title
+            }
+
             sendBtn.disabled = true;
             sendBtn.textContent = 'Claude is thinking...';
-
-            // Prepare the API request
-            const apiUrl = 'https://api.anthropic.com/v1/messages';
             
-            // NOTE: You requested 'claude-opus-4-20250514'.
-            // This model does not exist yet. Using the current top model.
-            // When your requested model is released, you can change the string below.
-            const modelName = 'claude-3-opus-20240229'; 
+            const apiUrl = 'https://thingproxy.freeboard.io/fetch/https://api.anthropic.com/v1/messages';
+            const modelName = 'claude-3-opus-20240229';
+
+            // Prepare messages for API, including the system prompt
+            const messagesForApi = [
+                ...activeChat.messages
+            ];
 
             try {
                 const response = await fetch(apiUrl, {
@@ -175,7 +331,8 @@
                     body: JSON.stringify({
                         model: modelName,
                         max_tokens: 2048,
-                        messages: conversationHistory
+                        system: CALCULATOR_SYSTEM_PROMPT, // Add system prompt here
+                        messages: messagesForApi
                     })
                 });
 
@@ -186,57 +343,49 @@
 
                 const result = await response.json();
                 const assistantMessage = result.content[0].text;
-
-                // Add assistant message to history and display it
-                conversationHistory.push({ role: 'assistant', content: assistantMessage });
-                displayMessage('assistant', assistantMessage);
+                await handleAssistantResponse(assistantMessage);
 
             } catch (error) {
                 console.error(error);
-                displayMessage('assistant', `Error: ${error.message}`);
+                displayMessage('error', error.message);
             } finally {
                 sendBtn.disabled = false;
                 sendBtn.textContent = 'Send Message';
-                saveData(); // Save conversation after each exchange
+                saveData(); // Save conversation state
             }
         }
 
         // --- Event Listeners ---
-
-        // Save API Key
         saveKeyBtn.addEventListener('click', () => {
             const newKey = apiKeyInput.value.trim();
             if (newKey) {
                 apiKey = newKey;
                 apiKeyInput.value = '********';
-                keyStatus.textContent = 'API Key saved successfully in your browser.';
+                keyStatus.textContent = 'API Key saved.';
                 saveData();
-            } else {
-                alert('Please enter a valid API Key.');
             }
         });
 
-        // Send message
+        newChatBtn.addEventListener('click', () => createNewChat());
+
+        chatList.addEventListener('click', (event) => {
+            if (event.target.tagName === 'LI') {
+                const chatId = event.target.dataset.chatId;
+                switchChat(chatId);
+            }
+        });
+
         sendBtn.addEventListener('click', getClaudeResponse);
         messageInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault(); // Prevent new line on Enter
+                event.preventDefault();
                 getClaudeResponse();
-            }
-        });
-
-        // Clear chat
-        clearChatBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear the entire chat history? This cannot be undone.')) {
-                conversationHistory = [];
-                chatLog.innerHTML = '';
-                localStorage.removeItem('claudeChatHistory');
             }
         });
 
         // --- Initial Load ---
         loadData();
+    });
     </script>
-
 </body>
 </html>
