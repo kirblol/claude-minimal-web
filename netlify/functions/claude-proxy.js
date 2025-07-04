@@ -13,7 +13,10 @@ exports.handler = async function(event, context) {
 
     // Get the messages from the frontend's request
     const { system, messages } = JSON.parse(event.body);
-    const modelName = 'claude-3-opus-20240229';
+
+    // --- UPDATED AS REQUESTED ---
+    const modelName = 'claude-opus-4-20250514'; 
+    
     const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
 
     try {
@@ -26,7 +29,7 @@ exports.handler = async function(event, context) {
             },
             body: JSON.stringify({
                 model: modelName,
-                max_tokens: 2048,
+                max_tokens: 2048, // This controls the max length of the *response*
                 system: system,
                 messages: messages
             })
@@ -35,6 +38,7 @@ exports.handler = async function(event, context) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('Anthropic API Error:', errorData);
+            // Pass the specific error message from Anthropic back to the frontend
             return { statusCode: response.status, body: JSON.stringify({ error: errorData.error.message }) };
         }
 
