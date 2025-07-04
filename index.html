@@ -125,7 +125,6 @@
             border: 2px solid var(--border-color);
             font-family: Georgia, serif;
         }
-        /* Removed blinking cursor as it doesn't work well on e-ink */
         .cursor { 
             display: inline-block; 
             width: 2px; 
@@ -174,7 +173,7 @@
         
         function saveData() { 
             try {
-                localStorage.setItem('claudeMultiChatData_Netlify', JSON.stringify(appData)); 
+                localStorage.setItem('claudeMultiChatData_Vercel', JSON.stringify(appData)); 
             } catch (e) {
                 console.log('LocalStorage not available');
             }
@@ -182,7 +181,7 @@
         
         function loadData() { 
             try {
-                const savedChatData = localStorage.getItem('claudeMultiChatData_Netlify'); 
+                const savedChatData = localStorage.getItem('claudeMultiChatData_Vercel'); 
                 if (savedChatData) { 
                     appData = JSON.parse(savedChatData); 
                 } 
@@ -283,7 +282,8 @@
             sendBtn.disabled = true;
             sendBtn.textContent = 'Claude is generating...';
             
-            const apiUrl = '/.netlify/edge-functions/claude-proxy';
+            // Updated API URL for Vercel
+            const apiUrl = '/api/claude-proxy';
             let assistantMessageElem = displayMessage('assistant', '');
             assistantMessageElem.innerHTML = "Assistant: <span class='cursor'>|</span>";
             let fullResponse = '';
@@ -294,7 +294,7 @@
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         system: CALCULATOR_SYSTEM_PROMPT,
-                        messages: activeChat.messages.filter(m => m.role !== 'tool') // Filter out tool messages for API
+                        messages: activeChat.messages.filter(m => m.role !== 'tool')
                     })
                 });
 
@@ -304,9 +304,6 @@
                     try {
                         const errorJson = JSON.parse(errorText);
                         errorMessage = errorJson.error || `API Error: ${response.status}`;
-                        if (errorJson.model) {
-                            errorMessage += ` (Model: ${errorJson.model})`;
-                        }
                     } catch {
                         errorMessage = `API Error: ${response.status} - ${errorText}`;
                     }
