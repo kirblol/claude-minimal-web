@@ -1,10 +1,11 @@
-// This is the final, corrected version using Netlify's native streaming support.
+// This is the final, corrected version that properly handles Netlify's event object.
 exports.handler = async function(event, context) {
+    // Check if it's a POST request
     if (event.httpMethod !== 'POST') {
-        // Return a standard Response object for the error
         return new Response('Method Not Allowed', { status: 405 });
     }
 
+    // Securely get the API key from environment variables
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_API_KEY) {
         return new Response(JSON.stringify({ error: 'API key not configured.' }), {
@@ -13,7 +14,10 @@ exports.handler = async function(event, context) {
         });
     }
 
-    const body = await event.text();
+    // --- THE KEY FIX IS HERE ---
+    // We access the request body directly from the `event.body` property.
+    // No function call is needed.
+    const body = event.body;
     const { system, messages } = JSON.parse(body);
 
     // Using the powerful Opus model, which is now safe thanks to streaming.
@@ -33,13 +37,12 @@ exports.handler = async function(event, context) {
                 max_tokens: 4096,
                 system: system,
                 messages: messages,
-                stream: true // The magic flag to enable streaming
+                stream: true // Enable streaming
             })
         });
 
-        // --- THE KEY FIX ---
-        // Instead of creating our own stream, we directly return a new Response object
-        // using the body and headers from Anthropic's response. This is what Netlify expects.
+        // Directly return a new Response object using the body and headers from Anthropic.
+        // This is the modern, correct way to stream on Netlify.
         return new Response(anthropicResponse.body, {
             status: anthropicResponse.status,
             headers: {
