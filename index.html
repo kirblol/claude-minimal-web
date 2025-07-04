@@ -304,6 +304,9 @@
                     try {
                         const errorJson = JSON.parse(errorText);
                         errorMessage = errorJson.error || `API Error: ${response.status}`;
+                        if (errorJson.model) {
+                            errorMessage += ` (Model: ${errorJson.model})`;
+                        }
                     } catch {
                         errorMessage = `API Error: ${response.status} - ${errorText}`;
                     }
