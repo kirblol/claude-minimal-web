@@ -46,7 +46,7 @@ export default async (request, context) => {
             });
         }
 
-        const modelName = 'claude-3-5-sonnet-20241022'; // Use a valid model name
+        const modelName = 'claude-opus-4-20250514'; // Use a valid model name
         const anthropicApiEndpoint = 'https://api.anthropic.com/v1/messages';
 
         const anthropicResponse = await fetch(anthropicApiEndpoint, {
