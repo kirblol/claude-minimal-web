@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Multi-Chat (Netlify)</title>
+    <title>Claude Multi-Chat (Streaming)</title>
     <style>
         :root {
             --border-color: #ccc;
@@ -19,14 +19,14 @@
             font-family: sans-serif;
             margin: 0;
             display: flex;
-            flex-direction: column; /* Default for mobile/Kindle */
+            flex-direction: column;
             height: 100vh;
             background-color: var(--bg-color);
             color: var(--text-color);
         }
         .container {
             display: flex;
-            flex-direction: column; /* Default stack layout */
+            flex-direction: column;
             height: 100%;
             overflow: hidden;
         }
@@ -83,16 +83,7 @@
         .message.assistant { color: #333; }
         .message.error { color: var(--error-color); font-weight: bold; }
         .message.tool { color: var(--tool-color); font-style: italic; }
-
         #input-area { padding: 1em; border-top: 1px solid var(--border-color); }
-        
-        input, button, textarea {
-            width: 100%;
-            padding: 0.8em;
-            margin: 0.5em 0;
-            box-sizing: border-box;
-            font-size: 1em;
-        }
         button {
             background-color: var(--button-bg);
             color: var(--button-text);
@@ -100,6 +91,13 @@
             cursor: pointer;
         }
         button:disabled { background-color: #888; }
+        textarea {
+            width: 100%;
+            padding: 0.8em;
+            margin: 0.5em 0;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
     </style>
 </head>
 <body>
@@ -114,9 +112,8 @@
                 <p>Your API key is securely managed by the server.</p>
             </div>
         </aside>
-
         <main id="main-chat">
-            <div id="chat-log"><p>Welcome! Select a chat from the list or start a new one.</p></div>
+            <div id="chat-log"><p>Welcome! Select a chat or start a new one.</p></div>
             <div id="input-area">
                 <textarea id="message-input" placeholder="Type your message..." rows="3"></textarea>
                 <button id="send-btn">Send Message</button>
@@ -124,118 +121,25 @@
         </main>
     </div>
 
-    <script>
+<script>
     document.addEventListener('DOMContentLoaded', () => {
         const chatLog = document.getElementById('chat-log');
         const messageInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const newChatBtn = document.getElementById('new-chat-btn');
         const chatList = document.getElementById('chat-list');
-
         let appData = { chats: {}, activeChatId: null };
         const CALCULATOR_SYSTEM_PROMPT = `You have access to a calculator tool. To use it, you must respond with **only** the following format: <calculate>expression</calculate>. For example: <calculate>2 * (3 + 4)</calculate>. The user will see the result of the calculation. Do not add any other text or explanation in the same message when you use the tool. Perform the calculation when the user asks a question that requires a precise mathematical answer.`;
-
-        function saveData() {
-            localStorage.setItem('claudeMultiChatData_Netlify', JSON.stringify(appData));
-        }
-
-        function loadData() {
-            const savedChatData = localStorage.getItem('claudeMultiChatData_Netlify');
-            if (savedChatData) {
-                appData = JSON.parse(savedChatData);
-            }
-            if (Object.keys(appData.chats).length === 0) {
-                createNewChat(false);
-            }
-            renderChatList();
-            renderActiveChat();
-        }
-
-        function renderChatList() {
-            chatList.innerHTML = '';
-            for (const chatId in appData.chats) {
-                const chat = appData.chats[chatId];
-                const listItem = document.createElement('li');
-                listItem.textContent = chat.title;
-                listItem.dataset.chatId = chatId;
-                if (chatId === appData.activeChatId) {
-                    listItem.classList.add('active-chat');
-                }
-                chatList.appendChild(listItem);
-            }
-        }
-
-        function renderActiveChat() {
-            chatLog.innerHTML = '';
-            const activeChat = appData.chats[appData.activeChatId];
-            if (!activeChat) {
-                chatLog.innerHTML = '<p>Select a chat or start a new one.</p>';
-                messageInput.disabled = true;
-                sendBtn.disabled = true;
-                return;
-            }
-            activeChat.messages.forEach(msg => displayMessage(msg.role, msg.content));
-            messageInput.disabled = false;
-            sendBtn.disabled = false;
-        }
-
-        function displayMessage(role, text) {
-            const messageElem = document.createElement('div');
-            messageElem.classList.add('message', role);
-            let roleDisplay = role.charAt(0).toUpperCase() + role.slice(1);
-            if (role === 'tool') roleDisplay = 'Calculator';
-
-            messageElem.textContent = `${roleDisplay}: ${text}`;
-            chatLog.appendChild(messageElem);
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        function createNewChat(shouldSave = true) {
-            const chatId = Date.now().toString();
-            appData.chats[chatId] = { id: chatId, title: 'New Chat', messages: [] };
-            appData.activeChatId = chatId;
-            if (shouldSave) {
-                saveData();
-                renderChatList();
-                renderActiveChat();
-            }
-        }
-
-        function switchChat(chatId) {
-            if (chatId === appData.activeChatId) return;
-            appData.activeChatId = chatId;
-            saveData();
-            renderChatList();
-            renderActiveChat();
-        }
-
-        function evaluateCalculation(expression) {
-            try {
-                return new Function('return ' + expression)();
-            } catch (error) {
-                return `Invalid expression: ${error.message}`;
-            }
-        }
         
-        async function handleAssistantResponse(assistantMessage) {
-            const activeChat = appData.chats[appData.activeChatId];
-            activeChat.messages.push({ role: 'assistant', content: assistantMessage });
-
-            const calcRegex = /<calculate>([\s\S]*?)<\/calculate>/;
-            const match = assistantMessage.match(calcRegex);
-
-            if (match && match[1]) {
-                const expression = match[1];
-                const result = evaluateCalculation(expression);
-                const resultText = `Result: ${result}`;
-                displayMessage('assistant', assistantMessage);
-                displayMessage('tool', resultText);
-                activeChat.messages.push({ role: 'tool', content: resultText });
-            } else {
-                displayMessage('assistant', assistantMessage);
-            }
-        }
-
+        function saveData() { localStorage.setItem('claudeMultiChatData_Netlify', JSON.stringify(appData)); }
+        function loadData() { const savedChatData = localStorage.getItem('claudeMultiChatData_Netlify'); if (savedChatData) { appData = JSON.parse(savedChatData); } if (Object.keys(appData.chats).length === 0) { createNewChat(false); } renderChatList(); renderActiveChat(); }
+        function renderChatList() { chatList.innerHTML = ''; for (const chatId in appData.chats) { const chat = appData.chats[chatId]; const listItem = document.createElement('li'); listItem.textContent = chat.title; listItem.dataset.chatId = chatId; if (chatId === appData.activeChatId) { listItem.classList.add('active-chat'); } chatList.appendChild(listItem); } }
+        function renderActiveChat() { chatLog.innerHTML = ''; const activeChat = appData.chats[appData.activeChatId]; if (!activeChat) { chatLog.innerHTML = '<p>Select a chat or start a new one.</p>'; messageInput.disabled = true; sendBtn.disabled = true; return; } activeChat.messages.forEach(msg => displayMessage(msg.role, msg.content)); messageInput.disabled = false; sendBtn.disabled = false; }
+        function displayMessage(role, text) { const messageElem = document.createElement('div'); messageElem.classList.add('message', role); let roleDisplay = role.charAt(0).toUpperCase() + role.slice(1); if (role === 'tool') roleDisplay = 'Calculator'; messageElem.textContent = `${roleDisplay}: ${text}`; chatLog.appendChild(messageElem); chatLog.scrollTop = chatLog.scrollHeight; return messageElem; }
+        function createNewChat(shouldSave = true) { const chatId = Date.now().toString(); appData.chats[chatId] = { id: chatId, title: 'New Chat', messages: [] }; appData.activeChatId = chatId; if (shouldSave) { saveData(); renderChatList(); renderActiveChat(); } }
+        function switchChat(chatId) { if (chatId === appData.activeChatId) return; appData.activeChatId = chatId; saveData(); renderChatList(); renderActiveChat(); }
+        function evaluateCalculation(expression) { try { return new Function('return ' + expression)(); } catch (error) { return `Invalid expression: ${error.message}`; } }
+        
         async function getClaudeResponse() {
             const activeChat = appData.chats[appData.activeChatId];
             const userMessage = messageInput.value.trim();
@@ -251,10 +155,15 @@
             }
 
             sendBtn.disabled = true;
-            sendBtn.textContent = 'Claude is thinking...';
+            sendBtn.textContent = 'Claude is generating...';
             
             const apiUrl = '/.netlify/functions/claude-proxy';
 
+            // --- NEW STREAMING LOGIC ---
+            let assistantMessageElem = displayMessage('assistant', ''); // Create an empty placeholder
+            assistantMessageElem.innerHTML = "Assistant: <span class='cursor'></span>"; // Add a blinking cursor
+            let fullResponse = '';
+            
             try {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -266,13 +175,47 @@
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown server error'}`);
+                    throw new Error(`API Error: ${response.status} - ${await response.text()}`);
                 }
 
-                const result = await response.json();
-                const assistantMessage = result.assistantResponse;
-                await handleAssistantResponse(assistantMessage);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonData = JSON.parse(line.substring(6));
+                            if (jsonData.type === 'content_block_delta') {
+                                fullResponse += jsonData.delta.text;
+                                // Sanitize HTML to be safe before rendering
+                                let safeText = fullResponse.replace(/</g, "<").replace(/>/g, ">");
+                                assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'></span>`;
+                                chatLog.scrollTop = chatLog.scrollHeight;
+                            }
+                        }
+                    }
+                }
+                
+                // Finalize the message
+                assistantMessageElem.innerHTML = `Assistant: ${fullResponse.replace(/</g, "<").replace(/>/g, ">")}`;
+                
+                // Now that the stream is done, save the full message and check for tools
+                activeChat.messages.push({ role: 'assistant', content: fullResponse });
+
+                const calcRegex = /<calculate>([\s\S]*?)<\/calculate>/;
+                const match = fullResponse.match(calcRegex);
+                if (match && match[1]) {
+                    const expression = match[1];
+                    const result = evaluateCalculation(expression);
+                    const resultText = `Result: ${result}`;
+                    displayMessage('tool', resultText);
+                    activeChat.messages.push({ role: 'tool', content: resultText });
+                }
 
             } catch (error) {
                 console.error(error);
@@ -285,24 +228,18 @@
         }
         
         newChatBtn.addEventListener('click', () => createNewChat());
-
-        chatList.addEventListener('click', (event) => {
-            if (event.target.tagName === 'LI') {
-                switchChat(event.target.dataset.chatId);
-            }
-        });
-
+        chatList.addEventListener('click', (event) => { if (event.target.tagName === 'LI') { switchChat(event.target.dataset.chatId); } });
         sendBtn.addEventListener('click', getClaudeResponse);
+        messageInput.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); getClaudeResponse(); } });
 
-        messageInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                getClaudeResponse();
-            }
-        });
+        // Add a simple blinking cursor style
+        const styleSheet = document.createElement("style");
+        styleSheet.type = "text/css";
+        styleSheet.innerText = ".cursor { display: inline-block; width: 10px; background-color: #000; animation: blink 1s step-end infinite; } @keyframes blink { from, to { background-color: transparent; } 50% { background-color: #000; } }";
+        document.head.appendChild(styleSheet);
 
         loadData();
     });
-    </script>
+</script>
 </body>
 </html>
