@@ -1,82 +1,242 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Claude Minimal</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Claude Chat</title>
     <style>
+        /* Ultra-minimalist styling for Kindle Paperwhite */
         body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
+            font-family: sans-serif;
+            margin: 1em;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        main {
+            max-width: 700px;
             margin: 0 auto;
-            padding: 10px;
-            background: #f0f0f0;
         }
-        #chat {
-            height: 70vh;
+        #chat-log {
+            border: 1px solid #ccc;
+            padding: 1em;
+            min-height: 200px;
+            max-height: 60vh;
             overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            background: white;
-            margin-bottom: 10px;
+            white-space: pre-wrap; /* Allows text to wrap */
+            word-wrap: break-word; /* Breaks long words */
         }
-        .user { color: #0066cc; margin: 5px 0; }
-        .assistant { color: #009933; margin: 5px 0; }
-        input, button {
-            padding: 8px;
-            font-size: 14px;
-            border: 1px solid #ccc;
+        .message {
+            margin-bottom: 1em;
         }
-        input { width: 75%; }
-        button { width: 20%; background: #0066cc; color: white; }
+        .message.user {
+            font-weight: bold;
+        }
+        .message.assistant {
+            color: #333;
+        }
+        input, button, textarea {
+            width: 100%;
+            padding: 0.8em;
+            margin: 0.5em 0;
+            box-sizing: border-box; /* Important for 100% width */
+            font-size: 1em;
+        }
+        button {
+            background-color: #000;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #888;
+        }
+        #api-key-section {
+            background-color: #f5f5f5;
+            padding: 1em;
+            border: 1px solid #ccc;
+            margin-bottom: 1em;
+        }
+        hr {
+            border: 1px solid #eee;
+            margin: 1.5em 0;
+        }
     </style>
 </head>
 <body>
-    <div id="chat"></div>
-    <div>
-        <input type="text" id="input" placeholder="Ask Claude..." autocomplete="off">
-        <button onclick="sendMessage()">Send</button>
-    </div>
+
+    <main>
+        <header>
+            <h1>Simple Claude Chat</h1>
+        </header>
+
+        <!-- API Key Section -->
+        <section id="api-key-section">
+            <h2>Settings</h2>
+            <label for="api-key-input">Anthropic API Key:</label>
+            <input type="password" id="api-key-input" placeholder="Enter your API key here">
+            <button id="save-key-btn">Save Key</button>
+            <p id="key-status" style="font-size: 0.8em;"></p>
+        </section>
+
+        <!-- Chat Section -->
+        <section>
+            <h2>Chat</h2>
+            <div id="chat-log"></div>
+            <hr>
+            <textarea id="message-input" placeholder="Type your message..." rows="3"></textarea>
+            <button id="send-btn">Send Message</button>
+            <button id="clear-chat-btn" style="background-color: #555;">Clear Chat History</button>
+        </section>
+    </main>
 
     <script>
-        const CLOUDE_WORKER_URL = "YOUR_WORKER_URL_HERE"; // Replace in Step 4
+        // --- DOM Elements ---
+        const apiKeyInput = document.getElementById('api-key-input');
+        const saveKeyBtn = document.getElementById('save-key-btn');
+        const keyStatus = document.getElementById('key-status');
+        const chatLog = document.getElementById('chat-log');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+
+        // --- State Variables ---
+        let apiKey = '';
+        let conversationHistory = []; // Array of {role: 'user'/'assistant', content: '...'}
+
+        // --- Functions ---
+
+        // Function to display messages in the chat log
+        function displayMessage(role, text) {
+            const messageElem = document.createElement('div');
+            messageElem.classList.add('message', role);
+            messageElem.textContent = `${role.charAt(0).toUpperCase() + role.slice(1)}: ${text}`;
+            chatLog.appendChild(messageElem);
+            // Scroll to the bottom of the chat log
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        // Function to save data (API key and chat history) to localStorage
+        function saveData() {
+            localStorage.setItem('anthropicApiKey', apiKey);
+            localStorage.setItem('claudeChatHistory', JSON.stringify(conversationHistory));
+        }
         
-        async function sendMessage() {
-            const input = document.getElementById('input');
-            const message = input.value.trim();
-            if (!message) return;
-            
-            input.disabled = true;
-            addToChat('user', message);
-            input.value = '';
-            
-            try {
-                const response = await fetch(CLOUDE_WORKER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                });
-                
-                const data = await response.json();
-                addToChat('assistant', data.response);
-            } catch (error) {
-                addToChat('system', `Error: ${error.message}`);
+        // Function to load data from localStorage on page load
+        function loadData() {
+            const savedKey = localStorage.getItem('anthropicApiKey');
+            if (savedKey) {
+                apiKey = savedKey;
+                apiKeyInput.value = '********'; // Don't show the full key
+                keyStatus.textContent = 'API Key is saved in your browser.';
+            } else {
+                keyStatus.textContent = 'No API Key found. Please enter one.';
             }
-            input.disabled = false;
-            input.focus();
+
+            const savedChat = localStorage.getItem('claudeChatHistory');
+            if (savedChat) {
+                conversationHistory = JSON.parse(savedChat);
+                conversationHistory.forEach(msg => displayMessage(msg.role, msg.content));
+            }
         }
-        
-        function addToChat(role, text) {
-            const chat = document.getElementById('chat');
-            const msgDiv = document.createElement('div');
-            msgDiv.className = role;
-            msgDiv.textContent = `${role.charAt(0).toUpperCase() + role.slice(1)}: ${text}`;
-            chat.appendChild(msgDiv);
-            chat.scrollTop = chat.scrollHeight;
+
+        // Function to call the Anthropic API
+        async function getClaudeResponse() {
+            if (!apiKey) {
+                alert('Please save your Anthropic API Key first.');
+                return;
+            }
+
+            const userMessage = messageInput.value.trim();
+            if (!userMessage) return;
+
+            // Add user message to history and display it
+            conversationHistory.push({ role: 'user', content: userMessage });
+            displayMessage('user', userMessage);
+            messageInput.value = '';
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Claude is thinking...';
+
+            // Prepare the API request
+            const apiUrl = 'https://api.anthropic.com/v1/messages';
+            
+            // NOTE: You requested 'claude-opus-4-20250514'.
+            // This model does not exist yet. Using the current top model.
+            // When your requested model is released, you can change the string below.
+            const modelName = 'claude-3-opus-20240229'; 
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelName,
+                        max_tokens: 2048,
+                        messages: conversationHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errorData.error.message}`);
+                }
+
+                const result = await response.json();
+                const assistantMessage = result.content[0].text;
+
+                // Add assistant message to history and display it
+                conversationHistory.push({ role: 'assistant', content: assistantMessage });
+                displayMessage('assistant', assistantMessage);
+
+            } catch (error) {
+                console.error(error);
+                displayMessage('assistant', `Error: ${error.message}`);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send Message';
+                saveData(); // Save conversation after each exchange
+            }
         }
-        
-        // Send on Enter key
-        document.getElementById('input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+
+        // --- Event Listeners ---
+
+        // Save API Key
+        saveKeyBtn.addEventListener('click', () => {
+            const newKey = apiKeyInput.value.trim();
+            if (newKey) {
+                apiKey = newKey;
+                apiKeyInput.value = '********';
+                keyStatus.textContent = 'API Key saved successfully in your browser.';
+                saveData();
+            } else {
+                alert('Please enter a valid API Key.');
+            }
         });
+
+        // Send message
+        sendBtn.addEventListener('click', getClaudeResponse);
+        messageInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent new line on Enter
+                getClaudeResponse();
+            }
+        });
+
+        // Clear chat
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear the entire chat history? This cannot be undone.')) {
+                conversationHistory = [];
+                chatLog.innerHTML = '';
+                localStorage.removeItem('claudeChatHistory');
+            }
+        });
+
+        // --- Initial Load ---
+        loadData();
     </script>
+
 </body>
 </html>
