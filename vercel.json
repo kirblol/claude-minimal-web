@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/claude-proxy.js": {
+    "api/gemini-proxy.js": {
       "maxDuration": 30
     }
   }
