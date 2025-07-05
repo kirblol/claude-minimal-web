@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Multi-Chat (Streaming)</title>
+    <title>Gemini Multi-Chat (Streaming)</title>
     <style>
         :root {
             --border-color: #000;
@@ -173,7 +173,7 @@
         
         function saveData() { 
             try {
-                localStorage.setItem('claudeMultiChatData_Vercel', JSON.stringify(appData)); 
+                localStorage.setItem('geminiMultiChatData_Vercel', JSON.stringify(appData)); 
             } catch (e) {
                 console.log('LocalStorage not available');
             }
@@ -181,7 +181,7 @@
         
         function loadData() { 
             try {
-                const savedChatData = localStorage.getItem('claudeMultiChatData_Vercel'); 
+                const savedChatData = localStorage.getItem('geminiMultiChatData_Vercel'); 
                 if (savedChatData) { 
                     appData = JSON.parse(savedChatData); 
                 } 
@@ -265,7 +265,7 @@
             } 
         }
         
-        async function getClaudeResponse() {
+        async function getGeminiResponse() {
             const activeChat = appData.chats[appData.activeChatId];
             const userMessage = messageInput.value.trim();
             if (!userMessage || !activeChat) return;
@@ -280,10 +280,10 @@
             }
 
             sendBtn.disabled = true;
-            sendBtn.textContent = 'Claude is generating...';
+            sendBtn.textContent = 'Gemini is generating...';
             
             // Updated API URL for Vercel
-            const apiUrl = '/api/claude-proxy';
+            const apiUrl = '/api/gemini-proxy';
             let assistantMessageElem = displayMessage('assistant', '');
             assistantMessageElem.innerHTML = "Assistant: <span class='cursor'>|</span>";
             let fullResponse = '';
@@ -326,8 +326,8 @@
                                 if (data === '[DONE]') continue;
                                 
                                 const jsonData = JSON.parse(data);
-                                if (jsonData.type === 'content_block_delta' && jsonData.delta?.text) {
-                                    fullResponse += jsonData.delta.text;
+                                if (jsonData.text) {
+                                    fullResponse += jsonData.text;
                                     let safeText = fullResponse.replace(/</g, "&lt;").replace(/>/g, "&gt;");
                                     assistantMessageElem.innerHTML = `Assistant: ${safeText}<span class='cursor'>|</span>`;
                                     chatLog.scrollTop = chatLog.scrollHeight;
@@ -368,16 +368,14 @@
                 switchChat(event.target.dataset.chatId); 
             } 
         });
-        sendBtn.addEventListener('click', getClaudeResponse);
+        sendBtn.addEventListener('click', getGeminiResponse);
         messageInput.addEventListener('keydown', (event) => { 
             if (event.key === 'Enter' && !event.shiftKey) { 
                 event.preventDefault(); 
-                getClaudeResponse(); 
+                getGeminiResponse(); 
             } 
         });
 
         loadData();
     });
 </script>
-</body>
-</html>
