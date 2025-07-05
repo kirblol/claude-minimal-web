@@ -3,7 +3,7 @@ export const config = {
 };
 
 export default async function handler(request) {
-  // Only allow POST requests
+  // Only allow POST requests to come
   if (request.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
   }
